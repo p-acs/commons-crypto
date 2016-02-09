@@ -16,7 +16,7 @@
 package de.petendi.commons.crypto.connector;
 
 public class CryptoException extends Exception {
-    CryptoException(Exception e) {
+    public CryptoException(Exception e) {
         super(e);
     }
 
