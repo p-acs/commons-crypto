@@ -16,19 +16,20 @@
 package de.petendi.commons.crypto;
 
 import de.petendi.commons.crypto.connector.SecurityProviderConnector;
-import org.apache.commons.io.IOUtils;
+import de.petendi.commons.crypto.model.HybridEncrypted;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.util.Base64;
+import java.security.PrivateKey;
 import java.util.HashMap;
 
-import de.petendi.commons.crypto.model.HybridEncrypted;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
+
 
 public class HybridCrypto {
 
@@ -37,6 +38,7 @@ public class HybridCrypto {
     private SymmetricCrypto symmetricCrypto = new SymmetricCrypto();
     private AsymmetricCrypto asymmetricCrypto;
     private final SecurityProviderConnector securityProviderConnector;
+
     public HybridCrypto(SecurityProviderConnector securityProviderConnector) {
         this.securityProviderConnector = securityProviderConnector;
         asymmetricCrypto = new AsymmetricCrypto(securityProviderConnector);
@@ -96,7 +98,7 @@ public class HybridCrypto {
 
     private byte[] encryptInternal(byte[] message) {
         createSymmetricPassphrase();
-        char[] base64PassPhrase = Base64.getEncoder().encodeToString(symmetricPassPhrase).toCharArray();
+        char[] base64PassPhrase = Base64.encodeBase64String(symmetricPassPhrase).toCharArray();
         byte[] encryptedBody = symmetricCrypto.encrypt(message, base64PassPhrase);
         encryptedMessage.setEncryptedBody(encryptedBody);
         return encryptedBody;
@@ -121,7 +123,7 @@ public class HybridCrypto {
     private char[] retrievePassPhrase(byte[] encryptedPassphrase, PrivateKey privateKey) {
         byte[] passPhrase = asymmetricCrypto.decrypt(
                 encryptedPassphrase, privateKey);
-        byte[] base64Passphrase = Base64.getEncoder().encode(passPhrase);
+        byte[] base64Passphrase = Base64.encodeBase64(passPhrase);
         return new String(base64Passphrase).toCharArray();
     }
 
@@ -129,7 +131,7 @@ public class HybridCrypto {
         byte[] passPhrase = asymmetricCrypto.decrypt(
                 encryptedPassphrase, password,
                 pkcs12Stream);
-        byte[] base64Passphrase = Base64.getEncoder().encode(passPhrase);
+        byte[] base64Passphrase = Base64.encodeBase64(passPhrase);
         return new String(base64Passphrase).toCharArray();
     }
 
