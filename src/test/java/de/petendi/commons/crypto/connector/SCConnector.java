@@ -16,12 +16,30 @@
 package de.petendi.commons.crypto.connector;
 
 
+import org.spongycastle.asn1.ASN1Sequence;
+import org.spongycastle.asn1.oiw.OIWObjectIdentifiers;
+import org.spongycastle.asn1.x500.X500Name;
+import org.spongycastle.asn1.x509.AlgorithmIdentifier;
+import org.spongycastle.asn1.x509.CRLDistPoint;
+import org.spongycastle.asn1.x509.DistributionPoint;
+import org.spongycastle.asn1.x509.DistributionPointName;
+import org.spongycastle.asn1.x509.Extension;
+import org.spongycastle.asn1.x509.GeneralName;
+import org.spongycastle.asn1.x509.GeneralNames;
+import org.spongycastle.asn1.x509.KeyUsage;
+import org.spongycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.spongycastle.cert.X509CertificateHolder;
+import org.spongycastle.cert.X509ExtensionUtils;
+import org.spongycastle.cert.X509v3CertificateBuilder;
 import org.spongycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.spongycastle.jcajce.provider.digest.SHA3;
 import org.spongycastle.jce.provider.BouncyCastleProvider;
 import org.spongycastle.openssl.PEMParser;
 import org.spongycastle.openssl.jcajce.JcaPEMWriter;
+import org.spongycastle.operator.ContentSigner;
+import org.spongycastle.operator.DigestCalculator;
+import org.spongycastle.operator.bc.BcDigestCalculatorProvider;
+import org.spongycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -29,7 +47,13 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.math.BigInteger;
-import java.security.*;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
@@ -55,51 +79,51 @@ public class SCConnector implements SecurityProviderConnector {
         BigInteger serialNumber = BigInteger
                 .valueOf(date.getTimeInMillis());
         // Subject and Issuer DN
-        org.bouncycastle.asn1.x500.X500Name subjectDN = new org.bouncycastle.asn1.x500.X500Name(dn);
-        org.bouncycastle.asn1.x500.X500Name issuerDN = new org.bouncycastle.asn1.x500.X500Name(issuer);
+        X500Name subjectDN = new X500Name(dn);
+        X500Name issuerDN = new X500Name(issuer);
         // Validity
         Date notBefore = date.getTime();
         date.add(Calendar.YEAR, 20);
         Date notAfter = date.getTime();
         // SubjectPublicKeyInfo
-        org.bouncycastle.asn1.x509.SubjectPublicKeyInfo subjPubKeyInfo = new org.bouncycastle.asn1.x509.SubjectPublicKeyInfo(
-                org.bouncycastle.asn1.ASN1Sequence.getInstance(publicKey.getEncoded()));
+        SubjectPublicKeyInfo subjPubKeyInfo = new SubjectPublicKeyInfo(
+                ASN1Sequence.getInstance(publicKey.getEncoded()));
 
-        org.bouncycastle.cert.X509v3CertificateBuilder certGen = new org.bouncycastle.cert.X509v3CertificateBuilder(
+        X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
                 issuerDN, serialNumber, notBefore, notAfter, subjectDN,
                 subjPubKeyInfo);
-        org.bouncycastle.operator.DigestCalculator digCalc = null;
+        DigestCalculator digCalc = null;
         try {
-            digCalc = new org.bouncycastle.operator.bc.BcDigestCalculatorProvider()
-                    .get(new org.bouncycastle.asn1.x509.AlgorithmIdentifier(org.bouncycastle.asn1.oiw.OIWObjectIdentifiers.idSHA1));
-            org.bouncycastle.cert.X509ExtensionUtils x509ExtensionUtils = new org.bouncycastle.cert.X509ExtensionUtils(digCalc);
+            digCalc = new BcDigestCalculatorProvider()
+                    .get(new AlgorithmIdentifier(OIWObjectIdentifiers.idSHA1));
+            X509ExtensionUtils x509ExtensionUtils = new X509ExtensionUtils(digCalc);
             // Subject Key Identifier
-            certGen.addExtension(org.bouncycastle.asn1.x509.Extension.subjectKeyIdentifier, false,
+            certGen.addExtension(Extension.subjectKeyIdentifier, false,
                     x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
             // Authority Key Identifier
-            certGen.addExtension(org.bouncycastle.asn1.x509.Extension.authorityKeyIdentifier, false,
+            certGen.addExtension(Extension.authorityKeyIdentifier, false,
                     x509ExtensionUtils.createAuthorityKeyIdentifier(subjPubKeyInfo));
             // Key Usage
-            certGen.addExtension(org.bouncycastle.asn1.x509.Extension.keyUsage, false, new org.bouncycastle.asn1.x509.KeyUsage(
-                    org.bouncycastle.asn1.x509.KeyUsage.dataEncipherment));
+            certGen.addExtension(Extension.keyUsage, false, new KeyUsage(
+                    KeyUsage.dataEncipherment));
             if (crlUri != null) {
                 // CRL Distribution Points
-                org.bouncycastle.asn1.x509.DistributionPointName distPointOne = new org.bouncycastle.asn1.x509.DistributionPointName(
-                        new org.bouncycastle.asn1.x509.GeneralNames(new org.bouncycastle.asn1.x509.GeneralName(
-                                org.bouncycastle.asn1.x509.GeneralName.uniformResourceIdentifier,
+                DistributionPointName distPointOne = new DistributionPointName(
+                        new GeneralNames(new GeneralName(
+                                GeneralName.uniformResourceIdentifier,
                                 crlUri)));
 
-                org.bouncycastle.asn1.x509.DistributionPoint[] distPoints = new org.bouncycastle.asn1.x509.DistributionPoint[1];
-                distPoints[0] = new org.bouncycastle.asn1.x509.DistributionPoint(distPointOne, null, null);
-                certGen.addExtension(org.bouncycastle.asn1.x509.Extension.cRLDistributionPoints, false,
-                        new org.bouncycastle.asn1.x509.CRLDistPoint(distPoints));
+                DistributionPoint[] distPoints = new DistributionPoint[1];
+                distPoints[0] = new DistributionPoint(distPointOne, null, null);
+                certGen.addExtension(Extension.cRLDistributionPoints, false,
+                        new CRLDistPoint(distPoints));
             }
 
             // Content Signer
-            org.bouncycastle.operator.ContentSigner sigGen = new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder(
+            ContentSigner sigGen = new JcaContentSignerBuilder(
                     getSignAlgorithm()).setProvider(getProviderName()).build(privateKey);
             // Certificate
-            return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+            return new JcaX509CertificateConverter()
                     .setProvider(getProviderName()).getCertificate(certGen.build(sigGen));
         } catch (Exception e) {
             throw new CryptoException(e);
