@@ -27,6 +27,11 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+    <scm>
+        <connection>scm:git:https://github.com/p-acs/commons-crypto</connection>
+        <developerConnection>scm:git:https://github.com/p-acs/commons-crypto</developerConnection>
+        <url>scm:git:https://github.com/p-acs/commons-crypto</url>
+    </scm>
     <distributionManagement>
 		<snapshotRepository>
 			<id>sonatype-nexus-snapshots</id>
