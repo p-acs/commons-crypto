@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/p-acs/commons-crypto.svg?branch=master)](https://travis-ci.org/p-acs/commons-crypto) [![Coverage Status](https://coveralls.io/repos/github/p-acs/commons-crypto/badge.svg?branch=master)](https://coveralls.io/github/p-acs/commons-crypto?branch=master)
+
 
 
 # Purpose

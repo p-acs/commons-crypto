@@ -5,6 +5,9 @@ script: "[ ${TRAVIS_PULL_REQUEST} = 'false' ] && mvn clean deploy --settings tar
 branches:
   only:
     - master
+
+after_success:
+    - mvn coveralls:report
  
 env:
   global:
