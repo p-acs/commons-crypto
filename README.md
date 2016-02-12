@@ -19,6 +19,28 @@ It offers logic for:
 If you are looking for a solution to secure your Android application, please have a look at 
 [Seccoco](https://github.com/p-acs/seccoco-android), which builds on top of this library.
 
+# Download
+--------
+
+Download [the latest JAR][maven].
+ 
+Or fetch via Maven:
+
+```xml
+<dependency>
+  <groupId>de.petendi</groupId>
+  <artifactId>commons-crypto</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+Or Gradle:
+
+```groovy
+compile 'de.petendi:commons-crypto:1.0.0'
+```
+
+Snapshots of the development version are available in [Sonatype's snapshots repository][snap].
+
 
 # Usage
 
@@ -81,3 +103,5 @@ for  [Spongycastle](https://github.com/bcgit/bc-java) in the test sources.
 
 You can find the example above together with additional usage examples in the test sources.
  
+[maven]: https://search.maven.org/remote_content?g=de.petendi&a=commons-crypto&v=LATEST
+[snap]: https://oss.sonatype.org/content/repositories/snapshots/
