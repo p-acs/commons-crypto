@@ -40,6 +40,7 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.util.encoders.Base64;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -208,6 +209,16 @@ public class BCConnector implements SecurityProviderConnector {
         keyGenerator.init(outputKeyLength, secureRandom);
         SecretKey key = keyGenerator.generateKey();
         return key;
+    }
+
+    @Override
+    public byte[] base64Encode(byte[] toEncode) {
+        return Base64.encode(toEncode);
+    }
+
+    @Override
+    public byte[] base64Decode(byte[] toDecode) {
+        return Base64.decode(toDecode);
     }
 
 
