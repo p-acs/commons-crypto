@@ -35,4 +35,6 @@ public interface SecurityProviderConnector {
     String getSignAlgorithm();
     KeyPair generateKeyPair();
     SecretKey generateSecretKey();
+    byte[] base64Encode(byte[] toEncode);
+    byte[] base64Decode(byte[] toDecode);
 }

@@ -27,7 +27,6 @@ import java.security.cert.X509Certificate;
 import java.security.PrivateKey;
 import java.util.HashMap;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 
 
@@ -98,7 +97,8 @@ public class HybridCrypto {
 
     private byte[] encryptInternal(byte[] message) {
         createSymmetricPassphrase();
-        char[] base64PassPhrase = Base64.encodeBase64String(symmetricPassPhrase).toCharArray();
+
+        char[] base64PassPhrase = new String(securityProviderConnector.base64Encode(symmetricPassPhrase)).toCharArray();
         byte[] encryptedBody = symmetricCrypto.encrypt(message, base64PassPhrase);
         encryptedMessage.setEncryptedBody(encryptedBody);
         return encryptedBody;
@@ -123,7 +123,7 @@ public class HybridCrypto {
     private char[] retrievePassPhrase(byte[] encryptedPassphrase, PrivateKey privateKey) {
         byte[] passPhrase = asymmetricCrypto.decrypt(
                 encryptedPassphrase, privateKey);
-        byte[] base64Passphrase = Base64.encodeBase64(passPhrase);
+        byte[] base64Passphrase = securityProviderConnector.base64Encode(passPhrase);
         return new String(base64Passphrase).toCharArray();
     }
 
@@ -131,7 +131,7 @@ public class HybridCrypto {
         byte[] passPhrase = asymmetricCrypto.decrypt(
                 encryptedPassphrase, password,
                 pkcs12Stream);
-        byte[] base64Passphrase = Base64.encodeBase64(passPhrase);
+        byte[] base64Passphrase = securityProviderConnector.base64Encode(passPhrase);
         return new String(base64Passphrase).toCharArray();
     }
 
