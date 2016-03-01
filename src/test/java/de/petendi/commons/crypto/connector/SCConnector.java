@@ -145,18 +145,22 @@ public class SCConnector implements SecurityProviderConnector {
         return md.digest();
     }
 
+    @Override
     public final PublicKey extractPublicKey(Reader pemReader) throws CryptoException {
-        PEMParser parser = new PEMParser(pemReader);
-        Object object;
+        return extractCertificate(pemReader).getPublicKey();
+    }
+
+    @Override
+    public X509Certificate extractCertificate(Reader pemReader) throws CryptoException {
         try {
-            object = parser.readObject();
+            PEMParser parser = new PEMParser(pemReader);
+            Object object = parser.readObject();
             pemReader.close();
             parser.close();
             if (object instanceof X509CertificateHolder) {
                 X509CertificateHolder x509Holder = (X509CertificateHolder) object;
-                X509Certificate x509 = new JcaX509CertificateConverter().setProvider(getProviderName())
+                return new JcaX509CertificateConverter().setProvider(getProviderName())
                         .getCertificate(x509Holder);
-                return x509.getPublicKey();
             } else {
                 throw new IllegalArgumentException("no certificate found in pem");
             }
@@ -166,7 +170,6 @@ public class SCConnector implements SecurityProviderConnector {
             throw new CryptoException(e);
         }
     }
-
     @Override
     public String getProviderName() {
         return "SC";

@@ -29,6 +29,7 @@ public interface SecurityProviderConnector {
                                       PublicKey publicKey, PrivateKey privateKey) throws CryptoException;
     void writeCertificate(Writer pemWriter, X509Certificate selfCert) throws IOException;
     byte[] hash(byte[] input);
+    X509Certificate extractCertificate(Reader pemReader) throws CryptoException;
     PublicKey extractPublicKey(Reader pemReader) throws CryptoException;
     String getProviderName();
     String getCryptoAlgorithm();
