@@ -15,10 +15,12 @@
  */
 package de.petendi.commons.crypto;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.StringReader;
-import java.io.StringWriter;
+import java.io.*;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.UnrecoverableEntryException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
 import org.junit.Assert;
@@ -69,5 +71,64 @@ public class TestHybridCrypto {
         Assert.assertArrayEquals(message.getBytes(),decryptedMessage);
         Signature signature = new Signature(SecurityProviderConnectorFactory.getSecurityProviderConnector());
         Assert.assertTrue(signature.verify(hybridEncrypted.getEncryptedBody(),hybridEncrypted.getSignature(),cert.getPublicKey()));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWithWrongContainerPassword() {
+        HybridCrypto hybridCrypto = new HybridCrypto(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        Certificates certificates = new Certificates(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        StringWriter stringWriter = new StringWriter();
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        String id = "test";
+        char[] password = "123".toCharArray();
+        certificates.create(id, password, stringWriter,
+                byteArrayOutputStream);
+        String cert = stringWriter.toString();
+        StringReader stringReader = new StringReader(cert);
+        hybridCrypto.addRecipient("test", stringReader);
+        String message = "I am hybrid encrypted!";
+        HybridEncrypted hybridEncrypted = hybridCrypto.build(message.getBytes(),password,new ByteArrayInputStream(byteArrayOutputStream.toByteArray()));
+        HybridCrypto freshHybridCrypto = new HybridCrypto(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        byte[] decryptedMessage = freshHybridCrypto.decrypt(hybridEncrypted,id,"wrong".toCharArray(),new ByteArrayInputStream(byteArrayOutputStream.toByteArray()));
+        Assert.assertArrayEquals(message.getBytes(),decryptedMessage);
+        Signature signature = new Signature(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        Assert.assertTrue(signature.verify(hybridEncrypted.getEncryptedBody(),hybridEncrypted.getSignature(),new StringReader(cert)));
+    }
+
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWithNullForPrivateKey() throws CertificateException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, UnrecoverableEntryException, IOException {
+        HybridCrypto hybridCrypto = new HybridCrypto(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        Certificates certificates = new Certificates(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        StringWriter stringWriter = new StringWriter();
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        String id = "test";
+        char[] password = "123".toCharArray();
+        X509Certificate cert = certificates.create(id, password, stringWriter,
+                byteArrayOutputStream);
+        hybridCrypto.addRecipient("test", cert);
+        String message = "I am hybrid encrypted!";
+        HybridEncrypted hybridEncrypted = hybridCrypto.build(message.getBytes(), new PrivateKeyExtractor().extractPrivateKey(password,new ByteArrayInputStream(byteArrayOutputStream.toByteArray())));
+        HybridCrypto freshHybridCrypto = new HybridCrypto(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        byte[] decryptedMessage = freshHybridCrypto.decrypt(hybridEncrypted,id,null);
+        Assert.assertArrayEquals(message.getBytes(),decryptedMessage);
+        Signature signature = new Signature(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        Assert.assertTrue(signature.verify(hybridEncrypted.getEncryptedBody(),hybridEncrypted.getSignature(),cert.getPublicKey()));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWithNullMessage() {
+        HybridCrypto hybridCrypto = new HybridCrypto(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        Certificates certificates = new Certificates(SecurityProviderConnectorFactory.getSecurityProviderConnector());
+        StringWriter stringWriter = new StringWriter();
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        String id = "test";
+        char[] password = "123".toCharArray();
+        certificates.create(id, password, stringWriter,
+                byteArrayOutputStream);
+        String cert = stringWriter.toString();
+        StringReader stringReader = new StringReader(cert);
+        hybridCrypto.addRecipient("test", stringReader);
+        hybridCrypto.build(null,password,new ByteArrayInputStream(byteArrayOutputStream.toByteArray()));
     }
 }
