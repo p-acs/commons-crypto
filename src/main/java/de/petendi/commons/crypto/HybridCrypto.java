@@ -23,18 +23,29 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.security.PrivateKey;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 
 import org.apache.commons.io.IOUtils;
 
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
 
 public class HybridCrypto {
 
-    private byte[] symmetricPassPhrase = null;
+    private final String SYMMETRIC_CIPHER_ALGORITHM = "AES/CBC/PKCS5Padding";
+
+    private byte[] iv = null;
+    private SecretKey symmetricKey = null;
+    private byte[] concatenated = null;
     private HybridEncrypted encryptedMessage = new HybridEncrypted();
-    private SymmetricCrypto symmetricCrypto = new SymmetricCrypto();
     private AsymmetricCrypto asymmetricCrypto;
     private final SecurityProviderConnector securityProviderConnector;
 
@@ -47,8 +58,15 @@ public class HybridCrypto {
     }
 
     private synchronized void createSymmetricPassphrase() {
-        if (symmetricPassPhrase == null) {
-            symmetricPassPhrase = securityProviderConnector.generateSecretKey().getEncoded();
+        if (symmetricKey == null) {
+            symmetricKey = securityProviderConnector.generateSecretKey();
+            SecureRandom randomSecureRandom = new SecureRandom();
+            iv = new byte[16];
+            randomSecureRandom.nextBytes(iv);
+            byte[] encodedKey = symmetricKey.getEncoded();
+            concatenated = new byte[iv.length + encodedKey.length];
+            System.arraycopy(iv, 0, concatenated, 0, iv.length);
+            System.arraycopy(encodedKey, 0, concatenated, iv.length, encodedKey.length);
         }
     }
 
@@ -56,9 +74,9 @@ public class HybridCrypto {
         try {
             createSymmetricPassphrase();
             String certificate = IOUtils.toString(pemReader);
-            byte[] encryptedPassPhrase = asymmetricCrypto.encrypt(symmetricPassPhrase, new StringReader(certificate));
+            byte[] encryptedPassPhrase = asymmetricCrypto.encrypt(concatenated, new StringReader(certificate));
             encryptedMessage.getRecipients().put(recipientIdentifier, encryptedPassPhrase);
-            encryptedMessage.getCertificates().put(recipientIdentifier,certificate);
+            encryptedMessage.getCertificates().put(recipientIdentifier, certificate);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -68,7 +86,7 @@ public class HybridCrypto {
     public HybridCrypto addRecipient(String recipientIdentifier, X509Certificate certificate) {
         try {
             createSymmetricPassphrase();
-            byte[] encryptedPassPhrase = asymmetricCrypto.encrypt(symmetricPassPhrase, certificate.getPublicKey());
+            byte[] encryptedPassPhrase = asymmetricCrypto.encrypt(concatenated, certificate.getPublicKey());
             encryptedMessage.getRecipients().put(recipientIdentifier, encryptedPassPhrase);
             StringWriter pemWriter = new StringWriter();
             securityProviderConnector.writeCertificate(pemWriter, certificate);
@@ -79,18 +97,18 @@ public class HybridCrypto {
         return this;
     }
 
-    public HybridEncrypted build(byte[] message,char[] signPassword,InputStream pkcs12Stream) {
+    public HybridEncrypted build(byte[] message, char[] signPassword, InputStream pkcs12Stream) {
         byte[] encryptedBody = encryptInternal(message);
         Signature signature = new Signature(securityProviderConnector);
-        byte[] signed = signature.sign(encryptedBody,signPassword,pkcs12Stream);
+        byte[] signed = signature.sign(encryptedBody, signPassword, pkcs12Stream);
         encryptedMessage.setSignature(signed);
         return encryptedMessage;
     }
 
-    public HybridEncrypted build(byte[] message,PrivateKey privateKey) {
+    public HybridEncrypted build(byte[] message, PrivateKey privateKey) {
         byte[] encryptedBody = encryptInternal(message);
         Signature signature = new Signature(securityProviderConnector);
-        byte[] signed = signature.sign(encryptedBody,privateKey);
+        byte[] signed = signature.sign(encryptedBody, privateKey);
         encryptedMessage.setSignature(signed);
         return encryptedMessage;
     }
@@ -98,41 +116,68 @@ public class HybridCrypto {
     private byte[] encryptInternal(byte[] message) {
         createSymmetricPassphrase();
 
-        char[] base64PassPhrase = new String(securityProviderConnector.base64Encode(symmetricPassPhrase)).toCharArray();
-        byte[] encryptedBody = symmetricCrypto.encrypt(message, base64PassPhrase);
-        encryptedMessage.setEncryptedBody(encryptedBody);
-        return encryptedBody;
+        try {
+            Cipher cipher = Cipher.getInstance(SYMMETRIC_CIPHER_ALGORITHM);
+            cipher.init(Cipher.ENCRYPT_MODE, symmetricKey, new IvParameterSpec(iv));
+            byte[] encryptedBody = cipher.doFinal(message);
+            encryptedMessage.setEncryptedBody(encryptedBody);
+            return encryptedBody;
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
-    public byte[] decrypt(HybridEncrypted encrypted,String recipientIdentifier,char[] password,InputStream pkcs12Stream) {
+    public byte[] decrypt(HybridEncrypted encrypted, String recipientIdentifier, char[] password, InputStream pkcs12Stream) {
         byte[] encryptedPassphrase = encrypted.getRecipients()
                 .get(recipientIdentifier);
-        char[] chars = retrievePassPhrase(encryptedPassphrase, password, pkcs12Stream);
-        return symmetricCrypto.decrypt(encrypted
-                .getEncryptedBody(), chars);
+        try {
+            ArrayList<byte[]> splitted = retrieveSecretAndIV(encryptedPassphrase, password, pkcs12Stream);
+            Cipher cipher = Cipher.getInstance(SYMMETRIC_CIPHER_ALGORITHM);
+            SecretKey originalKey = new SecretKeySpec(splitted.get(1), 0, splitted.get(1).length, "AES");
+            cipher.init(Cipher.DECRYPT_MODE, originalKey, new IvParameterSpec(splitted.get(0)));
+            return cipher.doFinal(encrypted.getEncryptedBody());
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
-    public byte[] decrypt(HybridEncrypted encrypted,String recipientIdentifier,PrivateKey privateKey) {
+    public byte[] decrypt(HybridEncrypted encrypted, String recipientIdentifier, PrivateKey privateKey) {
         byte[] encryptedPassphrase = encrypted.getRecipients()
                 .get(recipientIdentifier);
-        char[] chars = retrievePassPhrase(encryptedPassphrase, privateKey);
-        return symmetricCrypto.decrypt(encrypted
-                .getEncryptedBody(), chars);
+        try {
+            ArrayList<byte[]> splitted = retrieveSecretAndIV(encryptedPassphrase, privateKey);
+            Cipher cipher = Cipher.getInstance(SYMMETRIC_CIPHER_ALGORITHM);
+            SecretKey originalKey = new SecretKeySpec(splitted.get(1), 0, splitted.get(1).length, "AES");
+            cipher.init(Cipher.DECRYPT_MODE, originalKey, new IvParameterSpec(splitted.get(0)));
+            return cipher.doFinal(encrypted.getEncryptedBody());
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
-    private char[] retrievePassPhrase(byte[] encryptedPassphrase, PrivateKey privateKey) {
-        byte[] passPhrase = asymmetricCrypto.decrypt(
+
+    private ArrayList<byte[]> retrieveSecretAndIV(byte[] encryptedPassphrase, PrivateKey privateKey) {
+        byte[] concatenated = asymmetricCrypto.decrypt(
                 encryptedPassphrase, privateKey);
-        byte[] base64Passphrase = securityProviderConnector.base64Encode(passPhrase);
-        return new String(base64Passphrase).toCharArray();
+        ArrayList<byte[]> splitted = splitSecretAndIV(concatenated);
+        return splitted;
     }
 
-    private char[] retrievePassPhrase(byte[] encryptedPassphrase, char[] password, InputStream pkcs12Stream) {
-        byte[] passPhrase = asymmetricCrypto.decrypt(
+    private ArrayList<byte[]> retrieveSecretAndIV(byte[] encryptedPassphrase, char[] password, InputStream pkcs12Stream) {
+        byte[] concatenated = asymmetricCrypto.decrypt(
                 encryptedPassphrase, password,
                 pkcs12Stream);
-        byte[] base64Passphrase = securityProviderConnector.base64Encode(passPhrase);
-        return new String(base64Passphrase).toCharArray();
+        ArrayList<byte[]> splitted = splitSecretAndIV(concatenated);
+        return splitted;
+    }
+
+    private ArrayList<byte[]> splitSecretAndIV(byte[] concatenated) {
+        byte[] iv = Arrays.copyOfRange(concatenated, 0, 16);
+        byte[] symmetricKey = Arrays.copyOfRange(concatenated, 16, concatenated.length);
+        ArrayList<byte[]> splitted = new ArrayList<>(2);
+        splitted.add(0, iv);
+        splitted.add(1, symmetricKey);
+        return splitted;
     }
 
 
