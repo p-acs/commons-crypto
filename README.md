@@ -30,13 +30,13 @@ Or fetch via Maven:
 <dependency>
   <groupId>de.petendi</groupId>
   <artifactId>commons-crypto</artifactId>
-  <version>1.1.0</version>
+  <version>2.0.0</version>
 </dependency>
 ```
 Or Gradle:
 
 ```groovy
-compile 'de.petendi:commons-crypto:1.1.0'
+compile 'de.petendi:commons-crypto:2.0.0'
 ```
 
 Snapshots of the development version are available in [Sonatype's snapshots repository][snap].
